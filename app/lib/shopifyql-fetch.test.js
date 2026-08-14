@@ -44,4 +44,22 @@ describe("runShopifyQL", () => {
 
     await expect(runShopifyQL(admin, "FROM sales SHOW bogus_field")).rejects.toThrow(ShopifyQLError);
   });
+
+  it("throws ShopifyQLError with GraphQL error messages when top-level errors are present", async () => {
+    const admin = mockAdmin({
+      data: null,
+      errors: [
+        { message: "Missing required scope: read_reports" },
+        { message: "Invalid query syntax" },
+      ],
+    });
+
+    const error = await runShopifyQL(admin, "INVALID QUERY").catch((e) => e);
+
+    expect(error).toBeInstanceOf(ShopifyQLError);
+    expect(error.parseErrors).toEqual([
+      "Missing required scope: read_reports",
+      "Invalid query syntax",
+    ]);
+  });
 });
