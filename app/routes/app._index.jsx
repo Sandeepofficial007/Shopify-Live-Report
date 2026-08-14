@@ -1,5 +1,6 @@
 import { redirect } from "react-router";
 
-export async function loader() {
-  return redirect("/app/dashboard");
+export async function loader({ request }) {
+  const url = new URL(request.url);
+  return redirect(`/app/dashboard?${url.searchParams.toString()}`);
 }
