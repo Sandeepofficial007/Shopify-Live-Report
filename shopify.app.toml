@@ -2,7 +2,7 @@
 
 client_id = "d03cfd476d0658aea13357c9b591dfca"
 name = "live-store-report"
-application_url = "https://example.com"
+application_url = "https://shopify-live-report.onrender.com"
 embedded = true
 
 [access_scopes]
@@ -21,7 +21,7 @@ api_version = "2026-10"
   topics = [ "app/scopes_update" ]
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://shopify-live-report.onrender.com/auth/callback" ]
 
 [build]
 include_config_on_deploy = true
