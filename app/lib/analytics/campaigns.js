@@ -41,13 +41,16 @@ export async function fetchCampaigns(admin) {
     .map((r) => {
       const sales = salesByCampaign[r.utm_campaign] || { sa: 0, or: 0, av: 0 };
       const channel = r.referring_channel || r.traffic_type || "Direct";
+      // ShopifyQL numeric fields arrive as JSON strings (e.g. "sessions": "551"), not numbers.
+      // Coerce se/sa/or here too so downstream consumers (chart rendering, numeric sort)
+      // get real numbers rather than strings. cv/av are left alone: division already auto-coerces.
       return {
         nm: r.utm_campaign || "(no name)",
         ch: channel,
         tt: r.traffic_type || "",
-        se: r.campaign_sessions || 0,
-        sa: sales.sa,
-        or: sales.or,
+        se: Number(r.campaign_sessions || 0),
+        sa: Number(sales.sa || 0),
+        or: Number(sales.or || 0),
         cv: parseFloat(((r.campaign_conversion_rate || 0) * 100).toFixed(2)),
         av: sales.av,
         cl: colorFor(channel),
