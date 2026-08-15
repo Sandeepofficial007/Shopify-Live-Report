@@ -1,3 +1,5 @@
+import { GraphqlQueryError } from "@shopify/shopify-api";
+
 const MAX_RETRIES = 3;
 
 export class ShopifyQLError extends Error {
@@ -27,19 +29,42 @@ export async function runShopifyQL(admin, shopifyqlBody) {
   let attempt = 0;
 
   for (;;) {
-    const response = await admin.graphql(
-      `#graphql
-      query RunShopifyQL($query: String!) {
-        shopifyqlQuery(query: $query) {
-          tableData {
-            columns { name dataType }
-            rows
+    let response;
+    try {
+      response = await admin.graphql(
+        `#graphql
+        query RunShopifyQL($query: String!) {
+          shopifyqlQuery(query: $query) {
+            tableData {
+              columns { name dataType }
+              rows
+            }
+            parseErrors
           }
-          parseErrors
-        }
-      }`,
-      { variables: { query: shopifyqlBody } }
-    );
+        }`,
+        { variables: { query: shopifyqlBody } }
+      );
+    } catch (err) {
+      // Shopify's cost-based GraphQL throttling returns HTTP 200 with a
+      // GraphQL-level error, which the client library throws as
+      // GraphqlQueryError instead of returning a 429 response — so it needs
+      // its own retry path separate from the response.status === 429 check
+      // below (which only ever fires for transport-level throttling).
+      const isThrottled =
+        err instanceof GraphqlQueryError &&
+        /throttl|rate limit/i.test(err.message || "");
+
+      if (isThrottled && attempt < MAX_RETRIES) {
+        attempt += 1;
+        await sleep(500 * 2 ** attempt);
+        continue;
+      }
+
+      if (err instanceof GraphqlQueryError) {
+        throw new ShopifyQLError([err.message]);
+      }
+      throw err;
+    }
 
     if (response.status === 429 && attempt < MAX_RETRIES) {
       attempt += 1;

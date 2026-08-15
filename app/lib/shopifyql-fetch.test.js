@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { GraphqlQueryError } from "@shopify/shopify-api";
 import { runShopifyQL, ShopifyQLError } from "./shopifyql-fetch";
 
 function mockAdmin(jsonResponse, status = 200) {
@@ -62,4 +63,48 @@ describe("runShopifyQL", () => {
       "Invalid query syntax",
     ]);
   });
+
+  it("retries on cost-based GraphQL throttling (thrown GraphqlQueryError, not a 429 response) and succeeds", async () => {
+    const throttleError = new GraphqlQueryError({
+      message: "Rate limited. Please retry later.",
+    });
+    const admin = {
+      graphql: vi
+        .fn()
+        .mockRejectedValueOnce(throttleError)
+        .mockResolvedValueOnce({
+          status: 200,
+          json: async () => ({
+            data: {
+              shopifyqlQuery: {
+                parseErrors: [],
+                tableData: {
+                  columns: [{ name: "referrer_source" }, { name: "sessions" }],
+                  rows: [["direct", 9]],
+                },
+              },
+            },
+          }),
+        }),
+    };
+
+    const rows = await runShopifyQL(admin, "FROM sessions SHOW sessions GROUP BY referrer_source");
+
+    expect(rows).toEqual([{ referrer_source: "direct", sessions: 9 }]);
+    expect(admin.graphql).toHaveBeenCalledTimes(2);
+  });
+
+  it("wraps a persistent GraphqlQueryError as ShopifyQLError once retries are exhausted", async () => {
+    const throttleError = new GraphqlQueryError({
+      message: "Rate limited. Please retry later.",
+    });
+    const admin = {
+      graphql: vi.fn().mockRejectedValue(throttleError),
+    };
+
+    const error = await runShopifyQL(admin, "FROM sales SHOW net_sales").catch((e) => e);
+
+    expect(error).toBeInstanceOf(ShopifyQLError);
+    expect(error.parseErrors).toEqual(["Rate limited. Please retry later."]);
+  }, 15000);
 });
