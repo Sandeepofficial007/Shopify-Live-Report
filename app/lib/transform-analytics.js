@@ -16,12 +16,16 @@ function monthLabels() {
 }
 
 export async function fetchStoreAnalytics(admin) {
-  const [sales, conv, referrers, campaigns] = await Promise.all([
-    fetchSalesAndAOV(admin),
-    fetchConversionAndFunnel(admin),
-    fetchReferrers(admin),
-    fetchCampaigns(admin),
-  ]);
+  // Fetched sequentially, not via Promise.all: firing all four fetchers'
+  // ShopifyQL queries at once (5 simultaneous requests, since fetchCampaigns
+  // itself runs 2 in parallel) reliably triggered Shopify's cost-based
+  // GraphQL throttling in production. Sequencing them keeps concurrent
+  // request count low enough to avoid it, at the cost of a slightly slower
+  // dashboard load.
+  const sales = await fetchSalesAndAOV(admin);
+  const conv = await fetchConversionAndFunnel(admin);
+  const referrers = await fetchReferrers(admin);
+  const campaigns = await fetchCampaigns(admin);
 
   return {
     store: {

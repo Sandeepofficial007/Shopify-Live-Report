@@ -23,10 +23,11 @@ function colorFor(channel) {
 }
 
 export async function fetchCampaigns(admin) {
-  const [sessionRows, salesRows] = await Promise.all([
-    runShopifyQL(admin, campaignSessionsQuery()),
-    runShopifyQL(admin, campaignSalesQuery()),
-  ]);
+  // Sequential, not Promise.all: avoids adding to the simultaneous-request
+  // burst that triggered Shopify's cost-based GraphQL throttling in
+  // production (see transform-analytics.js).
+  const sessionRows = await runShopifyQL(admin, campaignSessionsQuery());
+  const salesRows = await runShopifyQL(admin, campaignSalesQuery());
 
   const salesByCampaign = {};
   salesRows.forEach((r) => {
